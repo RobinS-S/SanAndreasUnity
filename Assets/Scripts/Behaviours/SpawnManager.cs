@@ -136,8 +136,8 @@ namespace SanAndreasUnity.Behaviours
 
             Debug.LogFormat("Spawned ped {0} for player {1}, time: {2}", ped.DescriptionForLogging, player.DescriptionForLogging, 
                 F.CurrentDateForLogging);
-
-            return ped;
+			PathsManager.SpawnThem(); // i didnt know where to put this or how to do this eventwise
+			return ped;
         }
 
         void OnPlayerConnected(Player player)

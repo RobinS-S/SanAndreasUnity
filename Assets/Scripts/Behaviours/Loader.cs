@@ -100,6 +100,7 @@ namespace SanAndreasUnity.Behaviours
 				new LoadingStep ( StepSetSplash2, "Set splash 2" ),
 				new LoadingStep ( StepLoadMap, "Loading map", 2.1f ),
 				new LoadingStep ( StepLoadSpecialTextures, "Loading special textures", 0.01f ),
+				new LoadingStep ( StepLoadPaths, "DEV: LOADING PATHS..." ),
 			//	new LoadingStep ( StepLoadGXT, "Loading GXT", 0.15f),
 			};
 
@@ -121,6 +122,18 @@ namespace SanAndreasUnity.Behaviours
 
 			}
 
+		}
+
+		private static void StepLoadPaths()
+		{
+			for (int i = 0; i < 62; i++)
+			{
+				using (Stream node = ArchiveManager.ReadFile("nodes" + i + ".dat"))
+				{
+					Assets.Scripts.Importing.Paths.NodeFile nf = new Assets.Scripts.Importing.Paths.NodeFile(node);
+					PathsManager.AddNode(nf);
+				}
+			}
 		}
 
 		private static void AddLoadingStep (LoadingStep step)
