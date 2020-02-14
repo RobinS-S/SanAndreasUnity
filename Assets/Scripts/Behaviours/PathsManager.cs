@@ -1,5 +1,7 @@
 ﻿using Assets.Scripts.Importing.Paths;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace SanAndreasUnity.Behaviours
@@ -7,28 +9,31 @@ namespace SanAndreasUnity.Behaviours
 	public class PathsManager : MonoBehaviour
 	{
 		public static PathsManager Instance { get; private set; }
-		private static List<NodeFile> Nodes { get; set; }
 
-		public static void AddNode(NodeFile node)
+		public async static void SpawnThem()
 		{
-			if (Nodes == null) Nodes = new List<NodeFile>();
-			Nodes.Add(node);
-		}
-
-
-		public static void SpawnThem()
-		{
-			int peds = 0;
-			Nodes.ForEach(n =>
+			foreach (NodeFile file in NodeReader.Nodes)
 			{
-				peds += n.PathNodes.Count;
-			});
-			Debug.Log("peds to spawn:" + peds);
-			Nodes[0].PathNodes.ForEach(node =>
+				foreach (PathNode node in file.PathNodes.Where(pn => pn.IsPed))
 				{
-					Ped.SpawnPed(16, node.Position, new Quaternion(), false);
-					Ped.Instance.Teleport(node.Position);
-				});
+					for (int k = 0; k < node.LinkCount; k++)
+					{
+						try
+						{
+							int linkArrayIndex = node.BaseLinkID + k;
+							PathNode targetNode = NodeReader.Nodes.Single(nf => nf.Id == file.NodeLinks[linkArrayIndex].AreaID).PathNodes.ElementAt(file.NodeLinks[linkArrayIndex].NodeID);
+							int length = file.NodeLinks[node.BaseLinkID + k].Length;
+							Debug.LogError("Found node link " + node.NodeID + " to " + targetNode.NodeID);
+							Ped.Instance.Teleport(targetNode.Position);
+							await System.Threading.Tasks.Task.Delay(System.TimeSpan.FromMilliseconds (750));
+						}
+						catch (Exception)
+						{
+							Debug.LogError($"Error at node id {node.NodeID}, linkarrayindex {node.BaseLinkID + k}, desired file id {file.NodeLinks[node.BaseLinkID + k].AreaID}. loaded files: {NodeReader.Nodes.Count()}");
+						}
+					}
+				}
+			}
 		}
 		
 		void Awake()

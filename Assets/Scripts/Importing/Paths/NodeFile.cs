@@ -11,34 +11,80 @@ namespace Assets.Scripts.Importing.Paths
 	public class PathNode
 	{
 		public Vector3 Position { get; set; }
-		public int LinkID { get; set; }
+		public int BaseLinkID { get; set; }
 		public int AreaID { get; set; }
 		public int NodeID { get; set; }
-		public int PathWidth { get; set; }
+		public float PathWidth { get; set; }
 		public int NodeType { get; set; } // enum
-		public uint Flags { get; set; } // enum
+		public int LinkCount { get; set; }
+		public bool IsDeadEnd { get; set; }
+		public bool IsIgnoredNode { get; set; }
+		public bool IsRoadBlock { get; set; }
+		public bool IsWaterNode { get; set; }
+		public bool IsEmergencyVehicleOnly { get; set; }
+		public bool IsRestrictedAccess { get; set; }
+		public bool IsDontWander { get; set; }
+		public bool Unknown2 { get; set; }
+		public int Speedlimit { get; set; }
+		public bool Unknown3 { get; set; }
+		public bool Unknown4 { get; set; }
+		public int SpawnProbability { get; set; }
+		public int BehaviorType { get; set; }
+		public bool IsPed { get; set; }
 	}
 	public class NavNode
 	{
 		public Vector2 Position { get; set; }
-		public int AreaID { get; set; }
-		public int NodeID { get; set; }
+		public int TargetAreaID { get; set; }
+		public int TargetNodeID { get; set; }
 		public Vector2 Direction { get; set; }
-		public uint Flags { get; set; }
+		public int Width { get; set; }
+		public int NumLeftLanes { get; set; }
+		public int NumRightLanes { get; set; }
+		public int TrafficLightDirection { get; set; }
+		public int TrafficLightBehavior { get; set; }
+		public int IsTrainCrossing { get; set; }
+		public byte Flags { get; set; }
 	}
 	public class NodeLink
 	{
 		public int AreaID { get; set; }
-		public int LinkID { get; set; }
+		public int NodeID { get; set; }
+		public int Length { get; set; }
+	}
+	public class PathIntersectionFlags
+	{
+		public bool IsRoadCross { get; set; }
+		public bool IsTrafficLight { get; set; }
 	}
 	public class NavNodeLink
 	{
+		public int NodeLink { get; set; }
 		public int AreaID { get; set; }
-		public int NaviNodeID { get; set; }
+	}
+	public class NodeReader
+	{
+		public static List<NodeFile> Nodes { get; set; }
+		public static void StepLoadPaths()
+		{
+			for (int i = 0; i < 64; i++)
+			{
+				using (Stream node = SanAndreasUnity.Importing.Archive.ArchiveManager.ReadFile("nodes" + i + ".dat"))
+				{
+					NodeFile nf = new NodeFile(i, node);
+					AddNode(nf);
+				}
+			}
+		}
+		public static void AddNode(NodeFile node)
+		{
+			if (Nodes == null) Nodes = new List<NodeFile>();
+			Nodes.Add(node);
+		}
 	}
 	public class NodeFile
 	{
-		public string Name { get; set; }
+		public int Id { get; set; }
 		public int NumOfNodes { get; set; }
 		public int NumOfVehNodes { get; set; }
 		public int NumOfPedNodes { get; set; }
@@ -48,14 +94,17 @@ namespace Assets.Scripts.Importing.Paths
 		public List<NavNode> NavNodes { get; set; }
 		public List<NodeLink> NodeLinks { get; set; }
 		public List<NavNodeLink> NavNodeLinks { get; set; }
+		public List<PathIntersectionFlags> PathIntersections { get; set; }
 
 
-		public NodeFile(Stream stream)
+		public NodeFile(int id, Stream stream)
 		{
+			Id = id;
 			PathNodes = new List<PathNode>();
 			NavNodes = new List<NavNode>();
 			NodeLinks = new List<NodeLink>();
 			NavNodeLinks = new List<NavNodeLink>();
+			PathIntersections = new List<PathIntersectionFlags>();
 			using (BinaryReader reader = new BinaryReader(stream))
 			{
 				ReadHeader(reader);
@@ -77,6 +126,7 @@ namespace Assets.Scripts.Importing.Paths
 			for (int i = 0; i < NumOfNodes; i++)
 			{
 				PathNode node = new PathNode();
+				if (i > NumOfVehNodes) node.IsPed = true;
 				reader.ReadUInt32();
 				reader.ReadUInt32();
 				float x = (float)reader.ReadInt16() / 8;
@@ -85,14 +135,34 @@ namespace Assets.Scripts.Importing.Paths
 				node.Position = new Vector3(x, y, z);
 				short heuristic = reader.ReadInt16();
 				if (heuristic != 0x7FFE) UnityEngine.Debug.Log("corrupted path node?");
-				node.LinkID = (int)reader.ReadUInt16();
-				node.AreaID = (int)reader.ReadUInt16();
-				node.NodeID = (int)reader.ReadUInt16();
-				node.PathWidth = (int)reader.ReadByte();
-				node.NodeType = (int)reader.ReadByte();
-				node.Flags = reader.ReadUInt32();
+				node.BaseLinkID = reader.ReadUInt16();
+				node.AreaID = reader.ReadUInt16();
+				node.NodeID = reader.ReadUInt16();
+				node.PathWidth = (float)reader.ReadByte() / 8;
+				node.NodeType = reader.ReadByte();
+
+				byte flag = reader.ReadByte();
+				node.LinkCount = flag & 15;
+				if (((flag >> 4) & 1) == 1) node.IsDeadEnd = true;
+				if (((flag >> 5) & 1) == 1) node.IsIgnoredNode = true;
+				if (((flag >> 6) & 1) == 1) node.IsRoadBlock = true;
+				if (((flag >> 7) & 1) == 1) node.IsWaterNode = true;
+
+				flag = reader.ReadByte();
+				if ((flag & 1) == 1) node.IsEmergencyVehicleOnly = true;
+				if ((flag >> 1) == 1) node.IsRestrictedAccess = true;
+				if ((flag >> 2) == 1) node.IsDontWander = true;
+				if ((flag >> 3) == 1) node.Unknown2 = true;
+				node.Speedlimit = (flag >> 4) & 3;
+				if ((flag >> 6) == 1) node.Unknown3 = true;
+				if ((flag >> 7) == 1) node.Unknown4 = true;
+
+				flag = reader.ReadByte();
+				node.SpawnProbability = flag & 15;
+				node.BehaviorType = (flag >> 4) & 15;
+				flag = reader.ReadByte();
 				PathNodes.Add(node);
-				//UnityEngine.Debug.Log($"Node {i}: POS [{node.Position.x} {node.Position.y} {node.Position.z}] LinkID {node.LinkID} AreaID {node.AreaID} NodeID {node.NodeID} PathWidth {node.PathWidth} NodeType {node.NodeType} Flags {node.Flags}");
+				//UnityEngine.Debug.Log($"Node {i}: POS [{node.Position.x} {node.Position.y} {node.Position.z}] LinkID {node.LinkID} LinkCount {node.LinkCount} AreaID {node.AreaID} NodeID {node.NodeID} PathWidth {node.PathWidth} NodeType {node.NodeType} Flags {node.Flags}");
 			}
 		}
 		private void ReadNavNodes(BinaryReader reader)
@@ -100,11 +170,22 @@ namespace Assets.Scripts.Importing.Paths
 			for (int i = 0; i < NumOfNavNodes; i++)
 			{
 				NavNode node = new NavNode();
-				node.Position = new Vector2(((float)reader.ReadInt16()), ((float)reader.ReadInt16()));
-				node.AreaID = (int)reader.ReadUInt16();
-				node.NodeID = (int)reader.ReadUInt16();
-				node.Direction = new Vector2(((float)reader.ReadSByte()), ((float)reader.ReadSByte()));
-				node.Flags = reader.ReadUInt32();
+				node.Position = new Vector2(reader.ReadInt16(), reader.ReadInt16());
+				node.TargetAreaID = reader.ReadUInt16();
+				node.TargetNodeID = reader.ReadUInt16();
+				node.Direction = new Vector2(reader.ReadSByte(), reader.ReadSByte());
+				node.Width = reader.ReadByte() / 8;
+
+				byte flags = reader.ReadByte();
+				node.NumLeftLanes = flags & 7;
+				node.NumRightLanes = (flags >> 3) & 7;
+				node.TrafficLightDirection = (flags >> 4) & 1;
+
+				flags = reader.ReadByte();
+				node.TrafficLightBehavior = flags & 3;
+				node.IsTrainCrossing = (flags >> 2) & 1;
+				node.Flags = reader.ReadByte();
+
 				NavNodes.Add(node);
 				//UnityEngine.Debug.Log($"NavNode {i}: {node.Position.x} {node.Position.y} AreaID {node.AreaID} NodeID {node.NodeID} Direction {node.Direction.x} {node.Direction.y} Flags {node.Flags}");
 			}
@@ -114,10 +195,10 @@ namespace Assets.Scripts.Importing.Paths
 			for (int i = 0; i < NumOfLinks; i++)
 			{
 				NodeLink link = new NodeLink();
-				link.AreaID = (int)reader.ReadUInt16();
-				link.LinkID = (int)reader.ReadUInt16();
+				link.AreaID = reader.ReadUInt16();
+				link.NodeID = reader.ReadUInt16();
 				NodeLinks.Add(link);
-				//UnityEngine.Debug.Log($"NodeLink {i}: AreaID {link.AreaID} LinkID {link.LinkID}");
+				//UnityEngine.Debug.Log($"NodeLink {i}: AreaID {link.AreaID} NodeID {link.NodeID}");
 			}
 		}
 
@@ -127,9 +208,8 @@ namespace Assets.Scripts.Importing.Paths
 			{
 				ushort bytes = reader.ReadUInt16();
 				NavNodeLink link = new NavNodeLink();
-				link.AreaID = (byte)(bytes >> 16);
-				link.NaviNodeID = (byte)(bytes & 6);
-				// this is still wrong i think
+				link.NodeLink = bytes & 1023;
+				link.AreaID = bytes >> 10;
 				NavNodeLinks.Add(link);
 				//UnityEngine.Debug.Log($"NavLink {i} area ID {link.AreaID} NaviNodeID {link.NaviNodeID}");
 			}
@@ -138,7 +218,8 @@ namespace Assets.Scripts.Importing.Paths
 		{
 			for (int i = 0; i < NumOfLinks; i++)
 			{
-				int length = (int)reader.ReadByte();
+				ushort length = reader.ReadByte();
+				NodeLinks[i].Length = length;
 				//UnityEngine.Debug.Log($"Link length {i}: {length}");
 			}
 		}
@@ -148,7 +229,13 @@ namespace Assets.Scripts.Importing.Paths
 			for (int i = 0; i < NumOfLinks; i++)
 			{
 				byte roadCross = reader.ReadByte();
-				byte pedTrafficLight = reader.ReadByte();
+				//byte pedTrafficLight = reader.ReadByte();
+				/*
+				PathIntersectionFlags pif = new PathIntersectionFlags()
+				{
+					IsRoadCross = (roadCross & 1) ? true : false,
+					IsTrafficLight = (roadCross & 1) ? true : false
+				};*/
 				//UnityEngine.Debug.Log($"PathIntersectionFlags {i}: roadCross {roadCross} pedTrafficLight {pedTrafficLight}");
 			}
 		}

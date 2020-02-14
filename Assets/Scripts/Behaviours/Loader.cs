@@ -126,14 +126,7 @@ namespace SanAndreasUnity.Behaviours
 
 		private static void StepLoadPaths()
 		{
-			for (int i = 0; i < 62; i++)
-			{
-				using (Stream node = ArchiveManager.ReadFile("nodes" + i + ".dat"))
-				{
-					Assets.Scripts.Importing.Paths.NodeFile nf = new Assets.Scripts.Importing.Paths.NodeFile(node);
-					PathsManager.AddNode(nf);
-				}
-			}
+			Assets.Scripts.Importing.Paths.NodeReader.StepLoadPaths();
 		}
 
 		private static void AddLoadingStep (LoadingStep step)
